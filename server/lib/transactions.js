@@ -150,6 +150,7 @@ export async function createFromPaidExpense(
  * @param {models.Transaction} expenseTransaction is the transaction
  *  created on the collective's ledger.
  */
+// Deprecated feature: can be safely removed once all "donation" expenses are processed
 export async function createTransactionFromInKindDonation(expenseTransaction) {
   return models.Transaction.createDoubleEntry({
     netAmountInCollectiveCurrency: -expenseTransaction.amount,

@@ -282,6 +282,7 @@ export async function payExpense(remoteUser, expenseId, fees = {}) {
 
   // Expenses in kind can be made for collectives without any
   // funds. That's why we skip earlier here.
+  // Deprecated feature: can be safely removed once all "donation" expenses are processed
   if (expense.payoutMethod === 'donation') {
     const transaction = await createTransactionFromPaidExpense(host, null, expense, null, expense.UserId);
     await createTransactionFromInKindDonation(transaction);
@@ -289,6 +290,7 @@ export async function payExpense(remoteUser, expenseId, fees = {}) {
     await expense.collective.addUserWithRole(user, 'BACKER');
     return markExpenseAsPaid(expense);
   }
+
   const balance = await expense.collective.getBalance();
 
   if (expense.amount > balance) {

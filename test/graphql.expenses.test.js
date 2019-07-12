@@ -950,6 +950,7 @@ describe('GraphQL Expenses API', () => {
         expect(emailSendMessageSpy.args[3][1]).to.contain('Expense paid on WWCode Berlin');
       }); /* End of "pays the expense manually and reduces the balance of the collective" */
 
+      // We can safely remove this test because the feature is deprecated
       it('Pay expense in kind', async () => {
         // And the expense will be paid in kind
         expense.payoutMethod = 'donation';
