@@ -428,8 +428,8 @@ describe('createOrder', () => {
 
     const res = await utils.graphqlQuery(createOrderQuery, { order: newOrder });
     expect(res.errors[0].message).to.equal('Your card was declined.');
-    const pm = await models.PaymentMethod.findOne({ where: { name: uniqueName } });
-    expect(pm.CollectiveId).to.equal(null);
+    const pm = await models.PaymentMethod.findOne({ where: { name: uniqueName }, paranoid: false });
+    expect(pm.deletedAt).to.not.equal(null);
   });
 
   it('creates an order as logged in user', async () => {
