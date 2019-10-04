@@ -2,6 +2,7 @@ import sinon from 'sinon';
 import { expect } from 'chai';
 
 import models from '../server/models';
+import CTCPmProvider from '../server/paymentProviders/opencollective/collective';
 
 import * as utils from './utils';
 import * as store from './stores';
@@ -36,39 +37,26 @@ const createOrderQuery = `
 `;
 
 describe('paymentMethods.collective.to.collective.test.js', () => {
-  let sandbox,
-    user1,
-    user2,
-    transactions,
-    collective1,
-    collective2,
-    collective3,
-    collective5,
-    host1,
-    host2,
-    host3,
-    organization,
-    stripePaymentMethod,
-    openCollectivePaymentMethod;
-
   before(async () => {
     await utils.resetTestDB();
   });
 
-  describe('validation', () => {
-    it('validates the token for Stripe', done => {
-      models.PaymentMethod.create({
-        service: 'stripe',
-        type: 'creditcard',
-        token: 'invalid token',
-      }).catch(e => {
-        expect(e.message).to.equal('Invalid Stripe token invalid token');
-        done();
-      });
-    });
-  });
-
   describe('Collective to Collective Transactions', () => {
+    let sandbox,
+      user1,
+      user2,
+      transactions,
+      collective1,
+      collective2,
+      collective3,
+      collective5,
+      host1,
+      host2,
+      host3,
+      organization,
+      stripePaymentMethod,
+      openCollectivePaymentMethod;
+
     before('creates User 1', () =>
       models.User.createUserWithCollective({
         email: store.randEmail(),
@@ -454,4 +442,94 @@ describe('paymentMethods.collective.to.collective.test.js', () => {
       );
     });
   }); /** END OF "Recurring donations between Collectives with different hosts must be allowed"*/
+
+  describe('Refunds', () => {
+    let user, fromCollective, toCollective, host;
+
+    /** Create an order from `collective1` to `collective2` */
+    const createOrder = async (fromCollective, toCollective, amount = 5000) => {
+      const paymentMethod = await models.PaymentMethod.findOne({
+        where: { type: 'collective', service: 'opencollective' },
+      });
+
+      const order = await models.Order.create({
+        CreatedByUserId: user.id,
+        FromCollectiveId: fromCollective.id,
+        CollectiveId: toCollective.id,
+        totalAmount: amount,
+        currency: 'USD',
+        status: 'PENDING',
+        PaymentMethodId: paymentMethod.id,
+      });
+
+      // Bind some required properties
+      order.collective = toCollective;
+      order.fromCollective = fromCollective;
+      order.createByUser = user;
+      order.paymentMethod = paymentMethod;
+      return order;
+    };
+
+    before('Create initial data', async () => {
+      host = await models.Collective.create({ name: 'Host', currency: 'USD', isActive: true });
+      user = await models.User.createUserWithCollective({ email: store.randEmail(), name: 'User 1' });
+      const collectiveParams = { currency: 'USD', HostCollectiveId: host.id, isActive: true };
+      fromCollective = await models.Collective.create({ name: 'collective1', ...collectiveParams });
+      toCollective = await models.Collective.create({ name: 'collective2', ...collectiveParams });
+    });
+
+    it('Creates the opposite transactions', async () => {
+      const order = await createOrder(fromCollective, toCollective);
+      const result = await CTCPmProvider.processOrder(order);
+      console.log(result);
+    });
+
+    // it('Cannot reimburse money if it exceeds the Collective balance', async () => {
+    //   // Add user1 as an ADMIN of collective1
+    //   await models.Member.create({
+    //     CreatedByUserId: user1.id,
+    //     MemberCollectiveId: user1.CollectiveId,
+    //     CollectiveId: collective1.id,
+    //     role: 'ADMIN',
+    //   });
+
+    //   // Create stripe connected account to host of collective1
+    //   await store.stripeConnectedAccount(collective1.HostCollectiveId);
+    //   // Add credit card to collective1
+    //   await models.PaymentMethod.create({
+    //     name: '4242',
+    //     service: 'stripe',
+    //     type: 'creditcard',
+    //     token: 'tok_123456781234567812345678',
+    //     CollectiveId: collective1.HostCollectiveId,
+    //     monthlyLimitPerMember: 10000,
+    //   });
+    //   // finding opencollective payment method for collective1
+    //   openCollectivePaymentMethod = await models.PaymentMethod.findOne({
+    //     where: { type: 'collective', CollectiveId: collective1.id },
+    //   });
+
+    //   // get Balance given the created user
+    //   const ocPaymentMethodBalance = await openCollectivePaymentMethod.getBalanceForUser(user1);
+
+    //   // set an amount that's higher than the collective balance
+    //   const amountHigherThanCollectiveBalance = ocPaymentMethodBalance.amount + 1;
+
+    //   // Setting up order with amount higher than collective1 balance
+    //   const order = {
+    //     fromCollective: { id: collective1.id },
+    //     collective: { id: collective3.id },
+    //     paymentMethod: { uuid: openCollectivePaymentMethod.uuid },
+    //     totalAmount: amountHigherThanCollectiveBalance,
+    //   };
+
+    //   // Executing queries
+    //   const res = await utils.graphqlQuery(createOrderQuery, { order }, user1);
+
+    //   // Then there should be errors
+    //   expect(res.errors).to.exist;
+    //   expect(res.errors).to.not.be.empty;
+    //   expect(res.errors[0].message).to.contain("don't have enough funds available ");
+    // }); /** END OF "Cannot send money that exceeds Collective balance" */
+  });
 }); /** END OF "payments.collectiveToCollective.test" */
